@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Technivel App</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    
+    <style>
+        :root {
+            --bg-base: #021B2A;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --text-main: #ffffff;
+            --accent: #00F0FF;
+            --alert-color: #ff0000;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0; padding: 20px;
+            background: var(--bg-base);
+            font-family: 'Montserrat', sans-serif;
+            color: var(--text-main);
+            /* CORREÇÃO MOBILE: Min-height permite crescer e Auto permite rolar */
+            min-height: 100vh;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            overflow-y: auto; /* Permite rolar para atualizar */
+        }
+
+        /* --- 1. CAMADA DE ALERTA (FIXED PARA COBRIR TUDO) --- */
+        #alert-overlay {
+            position: fixed; /* Mudado de Absolute para Fixed */
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #500000;
+            opacity: 0; z-index: 1;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        @keyframes pulse-opacity {
+            0% { opacity: 0; }
+            50% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* --- 2. TELA DE LOGIN (FIXED) --- */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-base); z-index: 100;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: opacity 0.5s;
+        }
+
+        .login-card {
+            background: rgba(255,255,255,0.05); padding: 40px;
+            border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.1);
+            max-width: 90%;
+        }
+
+        input {
+            padding: 15px; border-radius: 10px; border: none;
+            width: 100%; max-width: 200px; text-align: center; font-size: 1.2rem;
+            margin-bottom: 20px; letter-spacing: 2px; text-transform: uppercase;
+        }
+
+        button {
+            padding: 12px 30px; border-radius: 30px; border: none;
+            background: var(--accent); color: #000; font-weight: bold;
+            cursor: pointer; transition: transform 0.2s;
+            text-transform: uppercase;
+        }
+        button:hover { transform: scale(1.05); }
+
+        /* --- 3. DASHBOARD --- */
+        .dashboard-card {
+            background: var(--glass-bg); padding: 40px 30px; border-radius: 24px;
+            width: 100%; max-width: 340px; text-align: center; display: none;
+            z-index: 10;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            margin: auto; /* Centraliza se sobrar espaço */
+        }
+
+        .water-tank { position: relative; width: 180px; height: 180px; margin: 0 auto 30px auto; border-radius: 50%; border: 5px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.5); overflow: hidden; }
+        .percentage-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; font-size: 3rem; font-weight: 700; }
+        .liquid { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: linear-gradient(to top, #003859, #0074D9); transition: height 1.5s ease-in-out, background 0.5s; }
+        
+        .liquid::before {
+            content: ''; position: absolute; width: 200%; height: 200%;
+            top: -160%; left: -50%; background: rgba(255, 255, 255, 0.15);
+            border-radius: 40%; animation: wave-anim 6s linear infinite;
+        }
+        @keyframes wave-anim { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Links do Rodapé */
+        .footer-links {
+            display: flex; justify-content: space-between; margin-top: 20px;
+            font-size: 0.75rem; opacity: 0.6;
+        }
+        .footer-links a { color: #fff; text-decoration: none; border-bottom: 1px dotted #fff; }
+
+    </style>
+</head>
+<body>
+
+    <div id="alert-overlay"></div>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <h2 style="margin-top:0;">BEM-VINDO</h2>
+            <p style="font-size: 0.8rem; opacity: 0.7;">Digite o ID do seu Sensor</p>
+            <input type="text" id="device-id" placeholder="Ex: EFFEED" maxlength="6">
+            <br>
+            <button onclick="salvarEConectar()">MONITORAR</button>
+        </div>
+    </div>
+
+    <div class="dashboard-card" id="main-dash">
+        <h2 id="res-name">CARREGANDO...</h2>
+        <div style="font-size: 0.8rem; margin-bottom: 20px; opacity: 0.6;">ID: <span id="display-id">--</span></div>
+        
+        <div class="water-tank">
+            <div class="percentage-text" id="res-percent">0%</div>
+            <div class="liquid" id="water-level"></div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px;">
+            <div style="text-align: left">
+                <span style="font-size: 0.7rem;">STATUS</span><br>
+                <strong id="status-txt">--</strong>
+            </div>
+            <div style="text-align: right">
+                <span style="font-size: 0.7rem;">SINAL</span><br>
+                <strong id="conn-status" style="color:#ffbb00">OFF</strong>
+            </div>
+        </div>
+
+        <div class="footer-links">
+            <a href="#" onclick="location.reload()">↻ Atualizar</a>
+            <a href="#" onclick="sair()">Sair ➔</a>
+        </div>
+    </div>
+
+    <script>
+        const broker = "broker.hivemq.com";
+        const port = 8000;
+        let client;
+        let userTopic = "";
+
+        window.onload = () => {
+            const savedID = localStorage.getItem("technivel_id");
+            if(savedID) {
+                document.getElementById("device-id").value = savedID;
+                salvarEConectar();
+            }
+        };
+
+        function salvarEConectar() {
+            const idInput = document.getElementById("device-id").value.toUpperCase().trim();
+            if(idInput.length < 2) { alert("ID Inválido!"); return; }
+
+            localStorage.setItem("technivel_id", idInput);
+            userTopic = "technivel/" + idInput + "/dados";
+            
+            document.getElementById("login-screen").style.opacity = "0";
+            setTimeout(() => { document.getElementById("login-screen").style.display = "none"; }, 500);
+            document.getElementById("main-dash").style.display = "block";
+            document.getElementById("display-id").innerText = idInput;
+
+            iniciarMQTT();
+        }
+
+        function sair() {
+            if(confirm("Deseja desconectar deste dispositivo?")) {
+                localStorage.removeItem("technivel_id");
+                location.reload();
+            }
+        }
+
+        function iniciarMQTT() {
+            const clientID = "web_" + Math.random().toString(16).substr(2, 8);
+            client = new Paho.MQTT.Client(broker, port, clientID);
+
+            client.onMessageArrived = (msg) => {
+                try {
+                    const d = JSON.parse(msg.payloadString);
+                    atualizarUI(d.nivel, d.nome);
+                } catch(e) {}
+            };
+
+            client.connect({
+                onSuccess: () => {
+                    document.getElementById("conn-status").innerText = "ONLINE";
+                    document.getElementById("conn-status").style.color = "#00FF88";
+                    client.subscribe(userTopic);
+                },
+                onFailure: () => { setTimeout(iniciarMQTT, 5000); },
+                useSSL: false
+            });
+        }
+
+        function atualizarUI(nivel, nome) {
+            const overlay = document.getElementById('alert-overlay');
+            const water = document.getElementById('water-level');
+            const stxt = document.getElementById('status-txt');
+
+            nivel = Math.min(100, Math.max(0, nivel));
+            
+            document.getElementById('res-percent').innerText = nivel + '%';
+            water.style.height = nivel + '%';
+            if(nome) document.getElementById('res-name').innerText = nome.toUpperCase();
+            
+            if(nivel <= 10 && nivel > 0) {
+                water.style.background = 'linear-gradient(to top, #FF0000, #8b0000)';
+                overlay.style.animation = "pulse-opacity 1s infinite";
+                stxt.innerText = "CRÍTICO!";
+                stxt.style.color = "#FF4B4B";
+            } 
+            else if (nivel == 0) {
+                overlay.style.animation = "none";
+                overlay.style.opacity = "0";
+                water.style.height = "0%";
+                stxt.innerText = "VAZIO";
+            }
+            else {
+                overlay.style.animation = "none";
+                overlay.style.opacity = "0";
+                water.style.background = nivel < 25 ? '#FF9068' : 'linear-gradient(to top, #003859, #0074D9)';
+                stxt.innerText = nivel < 25 ? "BAIXO" : "NORMAL";
+                stxt.style.color = "#FFF";
+            }
+        }
+    </script>
+</body>
+</html>
