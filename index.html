@@ -148,7 +148,7 @@
 
     <script>
         const broker = "broker.hivemq.com";
-        const port = 8000;
+        const port = 8884;
         let client;
         let userTopic = "";
 
@@ -200,7 +200,7 @@
                     client.subscribe(userTopic);
                 },
                 onFailure: () => { setTimeout(iniciarMQTT, 5000); },
-                useSSL: false
+                useSSL: true
             });
         }
 
@@ -237,4 +237,5 @@
         }
     </script>
 </body>
+
 </html>
