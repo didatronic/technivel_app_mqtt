@@ -3,247 +3,267 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Technivel Monitor</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <title>Technivel Multi</title>
     
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#021B2A">
     <link rel="apple-touch-icon" href="icon-192.png">
 
     <style>
-        :root {
-            --bg-base: #021B2A;
-            --glass-bg: rgba(255, 255, 255, 0.1);
-            --text-main: #ffffff;
-            --accent: #00F0FF;
-        }
-
+        :root { --bg-base: #021B2A; --glass-bg: rgba(255, 255, 255, 0.1); --text-main: #ffffff; --accent: #00F0FF; }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
+        
         body {
-            margin: 0; padding: 20px;
+            margin: 0; padding: 20px 20px 80px 20px;
             background: var(--bg-base);
-            font-family: 'Montserrat', sans-serif;
-            color: var(--text-main);
+            font-family: 'Montserrat', sans-serif; color: var(--text-main);
             min-height: 100vh;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
+            display: flex; flex-direction: column; align-items: center;
         }
 
-        /* --- MENUS E MODAIS --- */
-        #settings-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 200;
-            display: none; align-items: center; justify-content: center;
+        /* --- UI ELEMENTS --- */
+        .fab-add {
+            position: fixed; bottom: 30px; right: 30px;
+            width: 60px; height: 60px; border-radius: 50%;
+            background: var(--accent); color: #000;
+            font-size: 2rem; border: none; font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); cursor: pointer;
+            z-index: 50; display: flex; align-items: center; justify-content: center;
         }
 
-        .settings-card {
-            background: #082d41; padding: 30px; border-radius: 20px;
-            width: 300px; text-align: center; border: 1px solid #00F0FF;
+        #tanks-container { width: 100%; max-width: 400px; }
+
+        .tank-card {
+            background: var(--glass-bg); padding: 20px; border-radius: 24px;
+            width: 100%; text-align: center; margin-bottom: 25px;
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1); position: relative;
         }
 
-        .btn-gear {
-            position: absolute; top: 20px; right: 20px;
-            font-size: 1.5rem; cursor: pointer; z-index: 50;
-            opacity: 0.7; color: white; text-decoration: none;
-        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .tank-name { font-size: 1.1rem; font-weight: bold; margin: 0; text-align: left; }
+        .tank-id { font-size: 0.6rem; opacity: 0.5; display: block; text-align: left; }
+        .btn-config { font-size: 1.2rem; cursor: pointer; opacity: 0.7; text-decoration: none; color: white; }
 
-        /* --- DASHBOARD E LOGIN (ESTILO ANTERIOR) --- */
-        #alert-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #500000; opacity: 0; z-index: 1; pointer-events: none;
-            transition: opacity 0.5s ease;
-        }
+        .water-tank { position: relative; width: 140px; height: 140px; margin: 0 auto 15px auto; border-radius: 50%; border: 5px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); overflow: hidden; }
+        .percentage-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; font-size: 2.5rem; font-weight: 700; }
+        .liquid { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: linear-gradient(to top, #003859, #0074D9); transition: height 1.5s ease-in-out, background 0.5s; }
+        
+        .status-badge { font-size: 0.8rem; padding: 5px 10px; border-radius: 10px; background: rgba(255,255,255,0.1); display: inline-block; }
+
+        /* MODAL */
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; }
+        .modal-card { background: #082d41; padding: 30px; border-radius: 20px; width: 300px; text-align: center; border: 1px solid #00F0FF; }
+        input { padding: 12px; border-radius: 8px; border: none; width: 100%; margin-bottom: 15px; text-align: center; font-size: 1rem; }
+        .btn-save { padding: 10px; border-radius: 20px; border: none; background: var(--accent); font-weight: bold; width: 100%; cursor: pointer; margin-bottom: 10px; }
+        .btn-delete { background: #ff4b4b; color: white; }
+        .btn-cancel { background: transparent; color: white; text-decoration: underline; }
+
+        /* ALERTA CRÍTICO */
+        #alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #500000; opacity: 0; z-index: 1; pointer-events: none; transition: opacity 0.5s ease; }
         @keyframes pulse-opacity { 0% {opacity:0} 50% {opacity:1} 100% {opacity:0} }
 
-        #login-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-base); z-index: 100;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: opacity 0.5s;
-        }
-
-        .dashboard-card {
-            background: var(--glass-bg); padding: 40px 30px; border-radius: 24px;
-            width: 100%; max-width: 340px; text-align: center; display: none;
-            z-index: 10; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.1); margin: auto;
-        }
-
-        /* Inputs e Botões */
-        input {
-            padding: 12px; border-radius: 8px; border: none; width: 100%;
-            margin-bottom: 15px; text-align: center; font-size: 1rem;
-        }
-        .btn-save {
-            padding: 10px 20px; border-radius: 20px; border: none;
-            background: var(--accent); font-weight: bold; width: 100%; cursor: pointer;
-        }
-        .btn-cancel {
-            background: transparent; color: #fff; margin-top: 10px; cursor: pointer;
-            border: none; text-decoration: underline;
-        }
-
-        /* Água */
-        .water-tank { position: relative; width: 180px; height: 180px; margin: 0 auto 30px auto; border-radius: 50%; border: 6px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); overflow: hidden; }
-        .percentage-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; font-size: 3rem; font-weight: 700; }
-        .liquid { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: linear-gradient(to top, #003859, #0074D9); transition: height 1.5s ease-in-out, background 0.5s; }
-        .liquid::before { content: ''; position: absolute; width: 200%; height: 200%; top: -160%; left: -50%; background: rgba(255, 255, 255, 0.15); border-radius: 40%; animation: wave-anim 6s linear infinite; }
-        @keyframes wave-anim { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
+        #empty-state { text-align: center; margin-top: 100px; opacity: 0.7; display: none; }
+        
+        /* BOTÃO INSTALAR PWA */
+        #pwa-install-btn { display:none; background: #fff; color: #000; padding: 10px 20px; border-radius: 30px; margin: 20px auto; font-weight:bold; cursor:pointer; width: fit-content; }
     </style>
 </head>
 <body>
 
     <div id="alert-overlay"></div>
 
-    <a href="#" class="btn-gear" id="btn-settings" style="display:none" onclick="abrirConfig()">⚙️</a>
-
-    <div id="settings-modal">
-        <div class="settings-card">
-            <h3>PERSONALIZAR</h3>
-            <label style="font-size: 0.8rem; opacity: 0.7;">Nome do Reservatório</label>
-            <input type="text" id="custom-name" placeholder="Ex: Torre Bloco B">
-            
-            <button class="btn-save" onclick="salvarConfig()">SALVAR</button>
-            <button class="btn-cancel" onclick="fecharConfig()">Cancelar</button>
-        </div>
+    <div style="width:100%; max-width:400px; margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">MEUS TANQUES</h2>
+        <span id="conn-global" style="font-size:0.7rem; color:#ffbb00">CONECTANDO...</span>
     </div>
 
-    <div id="login-screen">
-        <div style="text-align:center">
-            <h2>TECHNIVEL</h2>
-            <p style="font-size: 0.8rem; margin-bottom: 20px;">ID do Dispositivo</p>
-            <input type="text" id="device-id" placeholder="Ex: EFFEED" maxlength="6" style="text-transform:uppercase">
-            <button class="btn-save" onclick="fazerLogin()">MONITORAR</button>
-        </div>
+    <div id="pwa-install-btn" onclick="instalarPWA()">⬇ INSTALAR APP</div>
+
+    <div id="tanks-container"></div>
+
+    <div id="empty-state">
+        <h3>Nenhum tanque monitorado</h3>
+        <p>Toque no + para adicionar</p>
     </div>
 
-    <div class="dashboard-card" id="main-dash">
-        <h2 id="res-name" style="margin: 0 0 5px 0;">AGUARDANDO...</h2>
-        <div style="font-size: 0.7rem; margin-bottom: 25px; opacity: 0.5;">ID: <span id="display-id">--</span></div>
-        
-        <div class="water-tank">
-            <div class="percentage-text" id="res-percent">0%</div>
-            <div class="liquid" id="water-level"></div>
-        </div>
-        
-        <div style="margin-top: 20px; font-size: 0.8rem;">
-            Status: <strong id="conn-status" style="color:#ffbb00">Conectando...</strong>
+    <button class="fab-add" onclick="abrirModalAdd()">+</button>
+
+    <div id="modal-overlay">
+        <div class="modal-card">
+            <h3 id="modal-title">NOVO DISPOSITIVO</h3>
+            <label style="font-size: 0.8rem; opacity: 0.7;">ID da Etiqueta</label>
+            <input type="text" id="input-id" placeholder="Ex: EFFEED" maxlength="6" style="text-transform:uppercase">
+            <label style="font-size: 0.8rem; opacity: 0.7;">Nome (Apelido)</label>
+            <input type="text" id="input-name" placeholder="Ex: Cisterna">
+            <button class="btn-save" onclick="salvarDispositivo()">SALVAR</button>
+            <button class="btn-save btn-delete" id="btn-delete" style="display:none" onclick="apagarDispositivo()">EXCLUIR</button>
+            <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
         </div>
     </div>
 
     <script>
-        // CONFIGURAÇÕES (Use WSS para GitHub Pages)
         const broker = "broker.hivemq.com";
-        const port = 8884; 
-        
+        const port = 8884; // Porta Segura para GitHub Pages
         let client;
-        let currentID = "";
-        let userTopic = "";
-        
-        // --- INICIALIZAÇÃO ---
+        let devices = [];
+        let editingIndex = -1;
+        let deferredPrompt; // Para PWA
+
         window.onload = () => {
-            const savedID = localStorage.getItem("technivel_id");
-            if(savedID) {
-                document.getElementById("device-id").value = savedID;
-                fazerLogin();
-            }
+            carregarDispositivos();
+            renderizarDashboard();
+            iniciarMQTT();
+            if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
         };
 
-        function fazerLogin() {
-            currentID = document.getElementById("device-id").value.toUpperCase().trim();
-            if(currentID.length < 2) return alert("ID Inválido");
+        // --- LÓGICA PWA ---
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('pwa-install-btn').style.display = 'block';
+        });
 
-            localStorage.setItem("technivel_id", currentID);
-            userTopic = "technivel/" + currentID + "/dados";
-
-            // UI Changes
-            document.getElementById("login-screen").style.opacity = "0";
-            setTimeout(() => { document.getElementById("login-screen").style.display = "none"; }, 500);
-            document.getElementById("main-dash").style.display = "block";
-            document.getElementById("btn-settings").style.display = "block";
-            document.getElementById("display-id").innerText = currentID;
-
-            // Carrega nome personalizado se existir
-            carregarConfigLocal();
-
-            iniciarMQTT();
-        }
-
-        // --- SISTEMA DE CONFIGURAÇÃO LOCAL ---
-        function abrirConfig() {
-            document.getElementById("settings-modal").style.display = "flex";
-            // Preenche com o valor salvo atual
-            const savedConfig = JSON.parse(localStorage.getItem("config_" + currentID) || "{}");
-            if(savedConfig.nome) document.getElementById("custom-name").value = savedConfig.nome;
-        }
-
-        function fecharConfig() {
-            document.getElementById("settings-modal").style.display = "none";
-        }
-
-        function salvarConfig() {
-            const novoNome = document.getElementById("custom-name").value;
-            
-            // Salva no localStorage vinculado ao ID atual
-            const config = { nome: novoNome };
-            localStorage.setItem("config_" + currentID, JSON.stringify(config));
-            
-            // Atualiza a tela na hora
-            if(novoNome) document.getElementById("res-name").innerText = novoNome.toUpperCase();
-            
-            fecharConfig();
-        }
-
-        function carregarConfigLocal() {
-            const savedConfig = JSON.parse(localStorage.getItem("config_" + currentID) || "{}");
-            if(savedConfig.nome) {
-                document.getElementById("res-name").innerText = savedConfig.nome.toUpperCase();
-                return true; // Retorna true se tiver config customizada
+        async function instalarPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                document.getElementById('pwa-install-btn').style.display = 'none';
             }
-            return false;
+        }
+
+        // --- GERENCIAMENTO DE DADOS ---
+        function carregarDispositivos() {
+            const saved = localStorage.getItem("technivel_devices");
+            if(saved) devices = JSON.parse(saved);
+        }
+
+        function salvarLocal() {
+            localStorage.setItem("technivel_devices", JSON.stringify(devices));
+            renderizarDashboard();
+            if(client && client.isConnected()) {
+                devices.forEach(d => client.subscribe("technivel/" + d.id + "/dados"));
+            }
+        }
+
+        function renderizarDashboard() {
+            const container = document.getElementById("tanks-container");
+            container.innerHTML = "";
+            document.getElementById("empty-state").style.display = devices.length === 0 ? "block" : "none";
+
+            devices.forEach((dev, index) => {
+                const html = `
+                <div class="tank-card" id="card-${dev.id}">
+                    <div class="card-header">
+                        <div><h3 class="tank-name">${dev.nome}</h3><span class="tank-id">ID: ${dev.id}</span></div>
+                        <a href="#" class="btn-config" onclick="abrirModalEdit(${index})">⚙️</a>
+                    </div>
+                    <div class="water-tank">
+                        <div class="percentage-text" id="perc-${dev.id}">--%</div>
+                        <div class="liquid" id="liq-${dev.id}"></div>
+                    </div>
+                    <div class="status-badge" id="status-${dev.id}">Aguardando...</div>
+                </div>`;
+                container.innerHTML += html;
+            });
         }
 
         // --- MQTT ---
         function iniciarMQTT() {
-            const clientID = "web_" + Math.random().toString(16).substr(2, 8);
+            const clientID = "multi_" + Math.random().toString(16).substr(2, 8);
             client = new Paho.MQTT.Client(broker, port, clientID);
             client.onMessageArrived = onMessageArrived;
-            client.connect({ onSuccess: onConnect, useSSL: true }); // SSL TRUE!
+            client.connect({ onSuccess: onConnect, onFailure: onFail, useSSL: true });
         }
 
         function onConnect() {
-            document.getElementById("conn-status").innerText = "ONLINE";
-            document.getElementById("conn-status").style.color = "#00FF88";
-            client.subscribe(userTopic);
+            document.getElementById("conn-global").innerText = "ONLINE";
+            document.getElementById("conn-global").style.color = "#00FF88";
+            devices.forEach(d => client.subscribe("technivel/" + d.id + "/dados"));
+        }
+
+        function onFail() {
+            document.getElementById("conn-global").innerText = "FALHA";
+            setTimeout(iniciarMQTT, 3000);
         }
 
         function onMessageArrived(msg) {
             try {
+                const topicParts = msg.destinationName.split("/");
+                const idFromTopic = topicParts[1];
                 const d = JSON.parse(msg.payloadString);
-                
-                // PRIORIDADE: Se tiver nome salvo no celular, usa ele.
-                // Se não, usa o nome que veio do Arduino.
-                const configLocal = JSON.parse(localStorage.getItem("config_" + currentID) || "{}");
-                const nomeParaExibir = configLocal.nome ? configLocal.nome : d.nome;
-
-                atualizarUI(d.nivel, nomeParaExibir);
+                atualizarCartao(idFromTopic, d.nivel);
             } catch(e) {}
         }
 
-        function atualizarUI(nivel, nome) {
-            // ... (Mesma lógica de antes para água e cores) ...
-            nivel = Math.min(100, Math.max(0, nivel));
-            document.getElementById('res-percent').innerText = nivel + '%';
-            document.getElementById('water-level').style.height = nivel + '%';
-            if(nome) document.getElementById('res-name').innerText = nome.toUpperCase();
+        function atualizarCartao(id, nivel) {
+            const percEl = document.getElementById("perc-" + id);
+            const liqEl = document.getElementById("liq-" + id);
+            const statusEl = document.getElementById("status-" + id);
+            const alertOverlay = document.getElementById("alert-overlay");
+
+            if(!percEl) return;
+
+            let visualNivel = Math.min(100, Math.max(0, nivel));
+            percEl.innerText = visualNivel + "%";
+            liqEl.style.height = visualNivel + "%";
+
+            // --- CORREÇÃO DE ALERTA (INCLUINDO 0% E NEGATIVOS) ---
+            if(nivel <= 10) {
+                // Modo Pânico
+                liqEl.style.background = "linear-gradient(to top, #FF0000, #8b0000)";
+                statusEl.innerText = (nivel <= 0) ? "VAZIO / ERRO" : "CRÍTICO!";
+                statusEl.style.color = "#FF4B4B";
+                alertOverlay.style.animation = "pulse-opacity 1s infinite";
+                alertOverlay.style.opacity = "1";
+            } else {
+                // Modo Normal
+                liqEl.style.background = nivel < 25 ? "#FF9068" : "linear-gradient(to top, #003859, #0074D9)";
+                statusEl.innerText = nivel < 25 ? "Nível Baixo" : "Normal";
+                statusEl.style.color = "#fff";
+                alertOverlay.style.animation = "none"; 
+                alertOverlay.style.opacity = "0";
+            }
+        }
+
+        // --- FUNÇÕES DE MODAL (Adicionar/Remover) ---
+        function abrirModalAdd() {
+            editingIndex = -1;
+            document.getElementById("modal-title").innerText = "ADICIONAR TANQUE";
+            document.getElementById("input-id").disabled = false;
+            document.getElementById("input-id").value = "";
+            document.getElementById("input-name").value = "";
+            document.getElementById("btn-delete").style.display = "none";
+            document.getElementById("modal-overlay").style.display = "flex";
+        }
+        function abrirModalEdit(index) {
+            editingIndex = index;
+            document.getElementById("modal-title").innerText = "EDITAR TANQUE";
+            document.getElementById("input-id").value = devices[index].id;
+            document.getElementById("input-id").disabled = true;
+            document.getElementById("input-name").value = devices[index].nome;
+            document.getElementById("btn-delete").style.display = "block";
+            document.getElementById("modal-overlay").style.display = "flex";
+        }
+        function fecharModal() { document.getElementById("modal-overlay").style.display = "none"; }
+        function salvarDispositivo() {
+            const id = document.getElementById("input-id").value.toUpperCase().trim();
+            const nome = document.getElementById("input-name").value.trim();
+            if(id.length < 2 || nome.length < 1) return alert("Dados inválidos");
             
-            // Alerta Overlay
-            const overlay = document.getElementById('alert-overlay');
-            if(nivel <= 10 && nivel > 0) overlay.style.animation = "pulse-opacity 1s infinite";
-            else { overlay.style.animation = "none"; overlay.style.opacity = "0"; }
+            if(editingIndex === -1) {
+                if(devices.find(d => d.id === id)) return alert("Já existe!");
+                devices.push({id, nome});
+            } else {
+                devices[editingIndex].nome = nome;
+            }
+            salvarLocal(); fecharModal();
+        }
+        function apagarDispositivo() {
+            if(confirm("Remover este tanque?")) { devices.splice(editingIndex, 1); salvarLocal(); fecharModal(); }
         }
     </script>
 </body>
