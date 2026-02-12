@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Technivel Multi</title>
+    <title>Technivel Pro</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#021B2A">
     <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <style>
         :root { --bg-base: #021B2A; --glass-bg: rgba(255, 255, 255, 0.1); --text-main: #ffffff; --accent: #00F0FF; }
@@ -19,18 +22,15 @@
             margin: 0; padding: 20px 20px 80px 20px;
             background: var(--bg-base);
             font-family: 'Montserrat', sans-serif; color: var(--text-main);
-            min-height: 100vh;
-            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; display: flex; flex-direction: column; align-items: center;
         }
 
         /* --- UI ELEMENTS --- */
         .fab-add {
-            position: fixed; bottom: 30px; right: 30px;
-            width: 60px; height: 60px; border-radius: 50%;
-            background: var(--accent); color: #000;
-            font-size: 2rem; border: none; font-weight: bold;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.5); cursor: pointer;
-            z-index: 50; display: flex; align-items: center; justify-content: center;
+            position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%;
+            background: var(--accent); color: #000; font-size: 2rem; border: none; font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); cursor: pointer; z-index: 50;
+            display: flex; align-items: center; justify-content: center;
         }
 
         #tanks-container { width: 100%; max-width: 400px; }
@@ -40,9 +40,12 @@
             width: 100%; text-align: center; margin-bottom: 25px;
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255,255,255,0.1); position: relative;
+            transition: opacity 0.3s;
         }
+        
+        .card-offline { opacity: 0.6; filter: grayscale(0.8); border: 1px solid #555; }
 
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .tank-name { font-size: 1.1rem; font-weight: bold; margin: 0; text-align: left; }
         .tank-id { font-size: 0.6rem; opacity: 0.5; display: block; text-align: left; }
         .btn-config { font-size: 1.2rem; cursor: pointer; opacity: 0.7; text-decoration: none; color: white; }
@@ -51,9 +54,19 @@
         .percentage-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; font-size: 2.5rem; font-weight: 700; }
         .liquid { position: absolute; bottom: 0; left: 0; width: 100%; height: 0%; background: linear-gradient(to top, #003859, #0074D9); transition: height 1.5s ease-in-out, background 0.5s; }
         
-        .status-badge { font-size: 0.8rem; padding: 5px 10px; border-radius: 10px; background: rgba(255,255,255,0.1); display: inline-block; }
+        .status-badge { font-size: 0.8rem; padding: 5px 10px; border-radius: 10px; background: rgba(255,255,255,0.1); display: inline-block; margin-bottom: 15px; }
 
-        /* MODAL */
+        /* MICRO LOG */
+        .history-log {
+            font-size: 0.7rem; text-align: left; background: rgba(0,0,0,0.3);
+            padding: 10px; border-radius: 10px; margin-top: 10px;
+        }
+        .log-title { font-weight: bold; margin-bottom: 5px; color: #aaa; display: block; }
+        .log-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 3px 0; }
+        .log-time { opacity: 0.6; }
+        .log-val { font-weight: bold; color: var(--accent); }
+
+        /* MODAIS E ALERTAS */
         #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: none; align-items: center; justify-content: center; }
         .modal-card { background: #082d41; padding: 30px; border-radius: 20px; width: 300px; text-align: center; border: 1px solid #00F0FF; }
         input { padding: 12px; border-radius: 8px; border: none; width: 100%; margin-bottom: 15px; text-align: center; font-size: 1rem; }
@@ -61,14 +74,25 @@
         .btn-delete { background: #ff4b4b; color: white; }
         .btn-cancel { background: transparent; color: white; text-decoration: underline; }
 
-        /* ALERTA CRÍTICO */
         #alert-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #500000; opacity: 0; z-index: 1; pointer-events: none; transition: opacity 0.5s ease; }
         @keyframes pulse-opacity { 0% {opacity:0} 50% {opacity:1} 100% {opacity:0} }
 
         #empty-state { text-align: center; margin-top: 100px; opacity: 0.7; display: none; }
         
-        /* BOTÃO INSTALAR PWA */
-        #pwa-install-btn { display:none; background: #fff; color: #000; padding: 10px 20px; border-radius: 30px; margin: 20px auto; font-weight:bold; cursor:pointer; width: fit-content; }
+        /* BOTÃO DE INSTALAÇÃO PWA */
+        #pwa-install-btn { 
+            display:none; 
+            background: linear-gradient(45deg, #00F0FF, #0074D9); 
+            color: #000; 
+            padding: 12px 25px; 
+            border-radius: 30px; 
+            margin: 0 auto 20px auto; 
+            font-weight: bold; 
+            cursor: pointer; 
+            box-shadow: 0 5px 15px rgba(0, 240, 255, 0.3);
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
     </style>
 </head>
 <body>
@@ -106,23 +130,37 @@
 
     <script>
         const broker = "broker.hivemq.com";
-        const port = 8884; // Porta Segura para GitHub Pages
+        const port = 8884;
         let client;
         let devices = [];
         let editingIndex = -1;
-        let deferredPrompt; // Para PWA
+        let deferredPrompt; // Armazena evento PWA
+        
+        let lastSeenMap = {}; 
+        let logsMap = {};
 
         window.onload = () => {
-            carregarDispositivos();
+            carregarDados();
             renderizarDashboard();
             iniciarMQTT();
-            if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js');
+            
+            // --- REGISTRO DO SERVICE WORKER (PWA) ---
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./service-worker.js')
+                .then(reg => console.log('SW registrado!', reg))
+                .catch(err => console.log('Erro SW:', err));
+            }
+            
+            setInterval(verificarConexaoDispositivos, 5000);
         };
 
-        // --- LÓGICA PWA ---
+        // --- LÓGICA DE INSTALAÇÃO PWA ---
         window.addEventListener('beforeinstallprompt', (e) => {
+            // Impede o Chrome de mostrar a barra nativa chata
             e.preventDefault();
+            // Salva o evento para usarmos no botão
             deferredPrompt = e;
+            // Mostra nosso botão bonito
             document.getElementById('pwa-install-btn').style.display = 'block';
         });
 
@@ -130,25 +168,24 @@
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
+                console.log(`Resultado instalação: ${outcome}`);
                 deferredPrompt = null;
                 document.getElementById('pwa-install-btn').style.display = 'none';
             }
         }
 
-        // --- GERENCIAMENTO DE DADOS ---
-        function carregarDispositivos() {
+        // --- DADOS ---
+        function carregarDados() {
             const saved = localStorage.getItem("technivel_devices");
             if(saved) devices = JSON.parse(saved);
         }
-
         function salvarLocal() {
             localStorage.setItem("technivel_devices", JSON.stringify(devices));
             renderizarDashboard();
-            if(client && client.isConnected()) {
-                devices.forEach(d => client.subscribe("technivel/" + d.id + "/dados"));
-            }
+            if(client && client.isConnected()) { devices.forEach(d => client.subscribe("technivel/" + d.id + "/dados")); }
         }
 
+        // --- UI ---
         function renderizarDashboard() {
             const container = document.getElementById("tanks-container");
             container.innerHTML = "";
@@ -165,7 +202,13 @@
                         <div class="percentage-text" id="perc-${dev.id}">--%</div>
                         <div class="liquid" id="liq-${dev.id}"></div>
                     </div>
-                    <div class="status-badge" id="status-${dev.id}">Aguardando...</div>
+                    <div class="status-badge" id="status-${dev.id}">Aguardando dados...</div>
+                    <div class="history-log">
+                        <span class="log-title">Últimas Leituras:</span>
+                        <div id="log-list-${dev.id}">
+                            <div class="log-item" style="opacity:0.5; text-align:center">Sem histórico recente</div>
+                        </div>
+                    </div>
                 </div>`;
                 container.innerHTML += html;
             });
@@ -173,7 +216,7 @@
 
         // --- MQTT ---
         function iniciarMQTT() {
-            const clientID = "multi_" + Math.random().toString(16).substr(2, 8);
+            const clientID = "web_" + Math.random().toString(16).substr(2, 8);
             client = new Paho.MQTT.Client(broker, port, clientID);
             client.onMessageArrived = onMessageArrived;
             client.connect({ onSuccess: onConnect, onFailure: onFail, useSSL: true });
@@ -195,11 +238,35 @@
                 const topicParts = msg.destinationName.split("/");
                 const idFromTopic = topicParts[1];
                 const d = JSON.parse(msg.payloadString);
-                atualizarCartao(idFromTopic, d.nivel);
+                
+                lastSeenMap[idFromTopic] = Date.now();
+                atualizarLog(idFromTopic, d.nivel);
+                atualizarCartao(idFromTopic, d.nivel, true); 
             } catch(e) {}
         }
 
-        function atualizarCartao(id, nivel) {
+        function atualizarLog(id, nivel) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            if(!logsMap[id]) logsMap[id] = [];
+            logsMap[id].unshift({ time: timeString, val: nivel });
+            if(logsMap[id].length > 5) logsMap[id].pop();
+            
+            const logContainer = document.getElementById("log-list-" + id);
+            if(logContainer) {
+                logContainer.innerHTML = "";
+                logsMap[id].forEach(log => {
+                    logContainer.innerHTML += `
+                    <div class="log-item">
+                        <span class="log-time">${log.time}</span>
+                        <span class="log-val">${log.val}%</span>
+                    </div>`;
+                });
+            }
+        }
+
+        function atualizarCartao(id, nivel, online) {
+            const cardEl = document.getElementById("card-" + id);
             const percEl = document.getElementById("perc-" + id);
             const liqEl = document.getElementById("liq-" + id);
             const statusEl = document.getElementById("status-" + id);
@@ -207,29 +274,48 @@
 
             if(!percEl) return;
 
-            let visualNivel = Math.min(100, Math.max(0, nivel));
-            percEl.innerText = visualNivel + "%";
-            liqEl.style.height = visualNivel + "%";
+            if (online) {
+                cardEl.classList.remove("card-offline");
+                let visualNivel = Math.min(100, Math.max(0, nivel));
+                percEl.innerText = visualNivel + "%";
+                liqEl.style.height = visualNivel + "%";
 
-            // --- CORREÇÃO DE ALERTA (INCLUINDO 0% E NEGATIVOS) ---
-            if(nivel <= 10) {
-                // Modo Pânico
-                liqEl.style.background = "linear-gradient(to top, #FF0000, #8b0000)";
-                statusEl.innerText = (nivel <= 0) ? "VAZIO / ERRO" : "CRÍTICO!";
-                statusEl.style.color = "#FF4B4B";
-                alertOverlay.style.animation = "pulse-opacity 1s infinite";
-                alertOverlay.style.opacity = "1";
+                if(nivel <= 10) {
+                    liqEl.style.background = "linear-gradient(to top, #FF0000, #8b0000)";
+                    statusEl.innerText = (nivel <= 0) ? "VAZIO / ERRO" : "CRÍTICO!";
+                    statusEl.style.color = "#FF4B4B";
+                    alertOverlay.style.animation = "pulse-opacity 1s infinite";
+                    alertOverlay.style.opacity = "1";
+                } else {
+                    liqEl.style.background = nivel < 25 ? "#FF9068" : "linear-gradient(to top, #003859, #0074D9)";
+                    statusEl.innerText = "Normal";
+                    statusEl.style.color = "#fff";
+                    alertOverlay.style.animation = "none"; 
+                    alertOverlay.style.opacity = "0";
+                }
             } else {
-                // Modo Normal
-                liqEl.style.background = nivel < 25 ? "#FF9068" : "linear-gradient(to top, #003859, #0074D9)";
-                statusEl.innerText = nivel < 25 ? "Nível Baixo" : "Normal";
-                statusEl.style.color = "#fff";
+                cardEl.classList.add("card-offline");
+                statusEl.innerText = "OFFLINE (Sem sinal)";
+                statusEl.style.color = "#aaa";
+                liqEl.style.background = "#555";
                 alertOverlay.style.animation = "none"; 
                 alertOverlay.style.opacity = "0";
             }
         }
 
-        // --- FUNÇÕES DE MODAL (Adicionar/Remover) ---
+        function verificarConexaoDispositivos() {
+            const agora = Date.now();
+            const limiteOffline = 120000; 
+            devices.forEach(dev => {
+                const ultimoSinal = lastSeenMap[dev.id] || 0;
+                if (agora - ultimoSinal > limiteOffline) {
+                    const percAtual = document.getElementById("perc-" + dev.id)?.innerText.replace('%','') || 0;
+                    atualizarCartao(dev.id, percAtual, false);
+                }
+            });
+        }
+
+        // --- MODAIS ---
         function abrirModalAdd() {
             editingIndex = -1;
             document.getElementById("modal-title").innerText = "ADICIONAR TANQUE";
@@ -253,13 +339,10 @@
             const id = document.getElementById("input-id").value.toUpperCase().trim();
             const nome = document.getElementById("input-name").value.trim();
             if(id.length < 2 || nome.length < 1) return alert("Dados inválidos");
-            
             if(editingIndex === -1) {
                 if(devices.find(d => d.id === id)) return alert("Já existe!");
                 devices.push({id, nome});
-            } else {
-                devices[editingIndex].nome = nome;
-            }
+            } else { devices[editingIndex].nome = nome; }
             salvarLocal(); fecharModal();
         }
         function apagarDispositivo() {
