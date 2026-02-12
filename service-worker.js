@@ -1,4 +1,4 @@
-const CACHE_NAME = 'technivel-v2';
+const CACHE_NAME = 'technivel-v3';
 const urlsToCache = [
   './',
   './index.html',
