@@ -134,17 +134,20 @@
         let client;
         let devices = [];
         let editingIndex = -1;
-        let deferredPrompt; // Armazena evento PWA
+        let deferredPrompt; 
         
         let lastSeenMap = {}; 
         let logsMap = {};
+        
+        // --- NOVO: Variável global para evitar spam de Push Notifications
+        let alertaEnviadoMap = {}; 
 
         window.onload = () => {
             carregarDados();
             renderizarDashboard();
             iniciarMQTT();
+            pedirPermissaoNotificacao(); // <-- NOVO: Pede a permissão para alertas ao abrir
             
-            // --- REGISTRO DO SERVICE WORKER (PWA) ---
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('./service-worker.js')
                 .then(reg => console.log('SW registrado!', reg))
@@ -154,13 +157,30 @@
             setInterval(verificarConexaoDispositivos, 5000);
         };
 
+        // --- NOVO: DESPERTADOR DE TELA (VISIBILITY API) ---
+        // Quando o cliente reabrir o app ou ligar a tela do celular, ele confere a conexão!
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") {
+                console.log("App voltou à tela! Verificando MQTT...");
+                document.getElementById("conn-global").innerText = "VERIFICANDO...";
+                document.getElementById("conn-global").style.color = "#ffbb00";
+
+                // Se o cliente existe mas a conexão "dormiu", nós religamos à força
+                if (typeof client !== 'undefined' && !client.isConnected()) {
+                    console.log("Conexão tinha caído em segundo plano. Religando...");
+                    iniciarMQTT();
+                } else {
+                    document.getElementById("conn-global").innerText = "ONLINE";
+                    document.getElementById("conn-global").style.color = "#00FF88";
+                }
+                verificarConexaoDispositivos();
+            }
+        });
+
         // --- LÓGICA DE INSTALAÇÃO PWA ---
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Impede o Chrome de mostrar a barra nativa chata
             e.preventDefault();
-            // Salva o evento para usarmos no botão
             deferredPrompt = e;
-            // Mostra nosso botão bonito
             document.getElementById('pwa-install-btn').style.display = 'block';
         });
 
@@ -168,9 +188,15 @@
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
-                console.log(`Resultado instalação: ${outcome}`);
                 deferredPrompt = null;
                 document.getElementById('pwa-install-btn').style.display = 'none';
+            }
+        }
+
+        // --- NOVO: PERMISSÃO DE NOTIFICAÇÃO ---
+        function pedirPermissaoNotificacao() {
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                Notification.requestPermission();
             }
         }
 
@@ -218,8 +244,21 @@
         function iniciarMQTT() {
             const clientID = "web_" + Math.random().toString(16).substr(2, 8);
             client = new Paho.MQTT.Client(broker, port, clientID);
+            
+            // --- NOVO: Tratamento nativo de queda de conexão
+            client.onConnectionLost = onConnectionLost; 
             client.onMessageArrived = onMessageArrived;
             client.connect({ onSuccess: onConnect, onFailure: onFail, useSSL: true });
+        }
+
+        // --- NOVO: O que fazer se o celular perder o 4G ou Wi-Fi
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Conexão perdida (onConnectionLost): " + responseObject.errorMessage);
+                document.getElementById("conn-global").innerText = "RECONECTANDO...";
+                document.getElementById("conn-global").style.color = "#ffbb00";
+                setTimeout(iniciarMQTT, 3000); // Tenta de novo em 3 segundos
+            }
         }
 
         function onConnect() {
@@ -286,12 +325,39 @@
                     statusEl.style.color = "#FF4B4B";
                     alertOverlay.style.animation = "pulse-opacity 1s infinite";
                     alertOverlay.style.opacity = "1";
+
+                    // --- NOVO: DISPARO DA NOTIFICAÇÃO PUSH NATIVA ---
+                    if (Notification.permission === "granted" && !alertaEnviadoMap[id]) {
+                        
+                        // Procura o nome bonito que o cliente deu pro tanque para colocar na notificação
+                        let nomeTanque = "Reservatório";
+                        let configTanque = devices.find(d => d.id === id);
+                        if (configTanque) nomeTanque = configTanque.nome;
+
+                        navigator.serviceWorker.ready.then(function(registration) {
+                            registration.showNotification("Technivel: ALERTA CRÍTICO!", {
+                                body: `Atenção: A água do seu(ua) ${nomeTanque} caiu para ${nivel}%.`,
+                                icon: './icon-192.png',
+                                vibrate: [200, 100, 200, 100, 200], // Código SOS em vibração
+                                tag: 'alerta-nivel-' + id,
+                                requireInteraction: true 
+                            });
+                        });
+                        alertaEnviadoMap[id] = true; // Trava para não fazer spam no celular
+                    }
+
                 } else {
                     liqEl.style.background = nivel < 25 ? "#FF9068" : "linear-gradient(to top, #003859, #0074D9)";
                     statusEl.innerText = "Normal";
                     statusEl.style.color = "#fff";
                     alertOverlay.style.animation = "none"; 
                     alertOverlay.style.opacity = "0";
+
+                    // --- NOVO: REARMA O ALERTA ---
+                    // Se a água encher para uma margem segura, nós destravamos o alarme
+                    if (nivel >= 25) {
+                        alertaEnviadoMap[id] = false;
+                    }
                 }
             } else {
                 cardEl.classList.add("card-offline");
